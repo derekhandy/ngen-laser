@@ -7,18 +7,14 @@
 <p align="center">
    <a href="https://go.dev"><img src="https://img.shields.io/badge/language-go-blue"></a>
    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
-   <a href="https://github.com/derekhandy/ngen-laser/actions/workflows/ci.yml/badge.svg?branch=main"><img src="https://github.com/derekhandy/ngen-laser/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-   <a href="https://github.com/derekhandy/ngen-laser/releases"><img src="https://img.shields.io/github/v/release/derekhandy/ngen-laser"></a>
+   <a href="https://github.com/derekhandy/laser/actions/workflows/ci.yml/badge.svg?branch=main"><img src="https://github.com/derekhandy/laser/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+   <a href="https://github.com/derekhandy/laser/releases"><img src="https://img.shields.io/github/v/release/derekhandy/laser"></a>
    <a href="https://discord.gg/yB9M3fnqm"><img src="https://img.shields.io/badge/discord-white?logo=discord"></a>
 </p>
 
----
-
-## Table Of Contents
-
 <div align="center">
-   <a href="#overview">Overview</a> &bull;
    <a href="#features">Features</a> &bull;
+   <a href="#overview">Overview</a> &bull;
    <a href="#requirements">Requirements</a> &bull;
    <a href="#installation">Installation</a> &bull;
    <a href="#quick-start">Quick Start</a> &bull;
@@ -33,37 +29,71 @@
       
 </div>
 
-## Overview
+---
 
 ## Features
 
 ### Codec
 - Lossless data compression
 - Archive path traversal protection and root-confined restore
-- Parsing schema that converts bits -> 3D coordinates
+- Parsing schema for binary to 3D coordinates
 - Affine math-based and traditional string-based compression commands
-- Packages stored in custom `.lzr` format
-- Recursive encoding / decoding
+- Packages stored in `.lzr` format
 
 ### AI
 - GRU recurrent state plus multi-head attention encoder layers
 - Extensive JSON configuration for network suite
 - CSV analytics written post generation
 - Atomic file writing for weights
-- Multi-core processing
+
+### General
+- CPU and memory monitoring / thresholds
+- Thread-safe parallel processing
+- Extensive tests for edge cases
+- Cross-platform support
+
+---
+
+## Overview
+
+LASER is an in-development data compression codec written in Go. Its purpose is to explore a range of binary representations, transformations, and encoding approaches for lossless compression.
+> LASER is not intended to replace existing compression solutions, business or personal, and does not benchmark higher than mainstream software. Readers seeking stable, well-benchmarked compression are referred to https://quixdb.github.io/squash-benchmark/ for more information regarding standard solutions.
+
+![Banner](public/img_1.png)
+
+**Encoding Pipeline 1.1**
+
+- The process begins by loading file binaries, segmenting them by packet size, and converting the data into a sequence of 3D coordinates.
+- These positions are supplied as input to a generation of neural networks, which are evaluated over a series of command proposal rounds.
+- As networks train on a file or directory, each evolution iteratively refines the data toward smaller packed instruction representations until either the configured number of generations is reached or the compression threshold is met.
+
+![Banner](public/img_2.png)
+
+**Encoding Pipeline 1.2**
+
+- Networks select both math-based commands, such as rotation and mirroring, and LZ-style techniques, including dictionary indexing and copy operations.
+- Encoding is performed exclusively by the networks; decoding is purely computational and does not require any weights.
+- The output of training and packaging is a .lzr archive containing instructions for procedurally regenerating the original data.
+
+The project's broader aim is to evaluate additional approaches to the same problem, including various polygon types for binary-to-coordinate mappings, higher-resolution coordinate spaces, affine transformations in four or more dimensions, and physics- or time-based procedural encodings. These directions have not yet been implemented or evaluated.
+
+---
 
 ## Requirements
 
 - **Go 1.22+**
 - Linux, MacOS, or Windows
 
+---
+
 ## Installation
 
 ```bash
-git clone https://github.com/derekhandy/ngen-laser.git && cd ngen-laser
+git clone https://github.com/derekhandy/laser.git && cd laser
 go mod tidy
 go build -o laser .
 ```
+---
 
 ## Quick Start
 
@@ -84,6 +114,8 @@ The optional `-t <comp-ratio>` flag overrides `thresholdCompToWrite` from
 
 Note:
 Using the default configuration values is recommended on first-time rollout.
+
+---
 
 ## Usage
 
@@ -123,9 +155,11 @@ unpack <path>
 Unpacking restores files beneath a `<original-name>-restore` directory and rejects paths that escape the restore root.
 Anyone with LASER can decompile all `.lzr` files without needing the weights of the neural network that generated them.
 
+---
+
 ## Configuration
 
-LASER reads JSON configuration from the ngen-laser/data directory:
+LASER reads JSON configuration from the laser/data directory:
 
 | File | Purpose |
 |---|---|
@@ -168,6 +202,8 @@ LASER reads JSON configuration from the ngen-laser/data directory:
 | `endTrainingOnThreshold` | Stop training once the threshold is reached. |
 | `allowStringOperations` | Enable string-oriented operands. |
 | `allowMathOperations` | Enable math/geometry-oriented operands. |
+
+---
 
 ## Data Directory Layout
 
@@ -248,7 +284,7 @@ Unpacking restores files beneath a `-restore` directory and rejects paths that e
 
 ## Contributing
 
-Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
+Contributions are welcome and encouraged. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
 
 In General:
 
