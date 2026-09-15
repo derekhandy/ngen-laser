@@ -88,11 +88,25 @@ The project's broader aim is to evaluate additional approaches to the same probl
 
 ## Installation
 
+### Pre-built binaries
+
+Download the `.tar.gz` for your platform from the [releases page](https://github.com/derekhandy/laser/releases), extract it,
+and run the binary.
+
+On Windows 10 or later: 
+```bash
+tar -xzf <release-name>.tar.gz
+<release-name>.exe help
+```
+
+### Go Build
+
 ```bash
 git clone https://github.com/derekhandy/laser.git && cd laser
 go mod tidy
 go build -o laser .
 ```
+
 ---
 
 ## Quick Start
