@@ -1,0 +1,13 @@
+{
+    "writeGenerationAnalytics": true,
+    "generationBasedNetworkWrite": true,
+    "writeNetworksGenerationInterval": 10,
+    "timeBasedNetworkWrite": true,
+    "writeNetworksIntervalTime": 320,
+    "warmupMemory": false,
+    "debugMode": false,
+    "thresholdCompToWrite": 0.9,
+    "endTrainingOnThreshold": true,
+    "allowStringOperations": true,
+    "allowMathOperations": true
+}

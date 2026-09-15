@@ -1,0 +1,19 @@
+{
+    "invalidPenalty": -0.08,
+    "validReward": 1.0,
+    "validIndex": 0.35,
+    "validOperand": 0.35,
+    "repeatComboPenalty": -0.05,
+    "attemptPenalty": -0.001,
+    "globalImprovementReward": 15.0,
+    "lengthReductionReward": 7.5,
+    "sizeGrowthPunishment": -0.05,
+    "improvementStreakReward": 7.5,
+    "firstAttemptReward": 3.25,
+    "firstOperandReward": 0.33,
+    "firstIndexUseReward": 0.1,
+    "discoveryReward": 2.0,
+    "tunnelPunishment": -0.05,
+    "earlyStopPenalty": -5.0,
+    "validStopReward": 10.0
+}

@@ -1,0 +1,21 @@
+{
+    "iterationLimit": 1,
+    "numOfGenerations": 20,
+    "populationSize": 100,
+    "mutationPercent": 0.05,
+    "mutationStrength": 0.08,
+    "dynamicTemperature": true,
+    "allowStopping": false,
+    "passes": 10,
+    "inputSize": 490,
+    "hiddenLayers": [
+        512,
+        512,
+        256,
+        128
+    ],
+    "elitePercent": 0.10,
+    "mutatedElitePercent": 0.60,
+    "crossoverPercent": 0.15,
+    "newInitPercent": 0.15
+}
