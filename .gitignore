@@ -1,5 +1,6 @@
 crawler/
 log/
+dist/
 
 /data/*
 !/data/config/
@@ -14,5 +15,7 @@ log/
 .git-backup
 .gocache/
 .gocache-race
+
+build-release.sh
 
 *.exe

@@ -3,8 +3,7 @@ package main
 type PacketTokenKind uint8
 
 const (
-	version = "v1.0.1"
-	seed    = 777
+	seed = 777
 
 	packetSize          = 27648
 	maxStringLength     = 500000
@@ -52,6 +51,7 @@ const (
 var (
 	operandLineLength = 2
 	operandLength     = lineLength * operandLineLength
+	version           = "v1.0.2"
 )
 
 func UpdateOperandLength(length int) {
