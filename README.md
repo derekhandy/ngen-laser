@@ -7,8 +7,8 @@
 <p align="center">
    <a href="https://go.dev"><img src="https://img.shields.io/badge/language-go-blue"></a>
    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
-   <a href="https://github.com/derekhandy/laser/actions/workflows/ci.yml/badge.svg?branch=main"><img src="https://github.com/derekhandy/laser/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-   <a href="https://github.com/derekhandy/laser/releases"><img src="https://img.shields.io/github/v/release/derekhandy/laser"></a>
+   <a href="https://github.com/derekhandy/ngen-laser/actions/workflows/ci.yml/badge.svg?branch=main"><img src="https://github.com/derekhandy/ngen-laser/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+   <a href="https://github.com/derekhandy/ngen-laser/releases"><img src="https://img.shields.io/github/v/release/derekhandy/ngen-laser"></a>
    <a href="https://discord.gg/yB9M3fnqm"><img src="https://img.shields.io/badge/discord-white?logo=discord"></a>
 </p>
 
@@ -90,7 +90,7 @@ The project's broader aim is to evaluate additional approaches to the same probl
 
 ### Pre-built binaries
 
-Download the `.tar.gz` for your platform from the [releases page](https://github.com/derekhandy/laser/releases), extract it,
+Download the `.tar.gz` for your platform from the [releases page](https://github.com/derekhandy/ngen-laser/releases), extract it,
 and run the binary.
 
 On Windows 10 or later: 
@@ -102,7 +102,7 @@ tar -xzf <release-name>.tar.gz
 ### Go Build
 
 ```bash
-git clone https://github.com/derekhandy/laser.git && cd laser
+git clone https://github.com/derekhandy/ngen-laser.git && cd laser
 go mod tidy
 go build -o laser .
 ```
