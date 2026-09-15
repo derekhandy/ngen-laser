@@ -408,12 +408,15 @@ func cleanArchivePath(archivedPath string) (string, error) {
 	return cleaned, nil
 }
 
+func isASCIIAlpha(c byte) bool {
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+}
+
 func hasWindowsDriveLetter(path string) bool {
 	if len(path) < 2 {
 		return false
 	}
-	c := path[0]
-	if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+	if !isASCIIAlpha(path[0]) {
 		return false
 	}
 	return path[1] == ':'

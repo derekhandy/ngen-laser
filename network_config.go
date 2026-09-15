@@ -280,7 +280,7 @@ func LoadConfigs(rollout *Rollout, load []int) error {
 
 		_flags, err := LoadTrainingFlags(rollout.Paths.Config("training-flags.json"))
 		if err != nil {
-			return fmt.Errorf("[!] Could not load training-flags.json: %v\n", err)
+			return fmt.Errorf("[!] Could not load training-flags.json: %v", err)
 		}
 
 		if rollout.ThresholdCompOverride != nil {

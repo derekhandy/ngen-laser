@@ -13,7 +13,6 @@ import (
 type ICommands struct{}
 
 var currentString = ""
-var inUse = false
 
 func NewICommands() *ICommands {
 	return &ICommands{}

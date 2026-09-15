@@ -3,7 +3,7 @@ package main
 type PacketTokenKind uint8
 
 const (
-	version = "v1.1.4"
+	version = "v1.0.0"
 	seed    = 777
 
 	packetSize          = 27648
