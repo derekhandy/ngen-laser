@@ -1,3 +1,21 @@
+//
+// Copyright 2026 Derek Handy
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Project can be found at: https://github.com/derekhandy/ngen-laser
+//
+
 package main
 
 import (
@@ -327,28 +345,23 @@ func IndexLengthCandidatesForInstruction(instructionLength int, varMax int) []in
 
 func (c *ICommands) ResolveInstructions(inst string) string {
 	i := NewInstructions()
-
 	current := inst
 	for iter := 0; iter < variableTokenCount; iter++ {
 		if !ContainsAlphabetic(current) {
 			return current
 		}
-
 		index := []IndexEntry{}
 		next := i.Interpret(current, 0, &index)
 		if next == "" || next == "+" {
 			return next
 		}
-
 		next = i.Devariablize(next, variableTokenCount)
 		next = i.Render(next, 0, &index)
 		if next == current {
 			return next
 		}
-
 		current = next
 	}
-
 	return current
 }
 
@@ -361,6 +374,13 @@ func (c *ICommands) Validate(modified, original string) bool {
 	}
 	original, err = c.ReturnRenderedStrict(original)
 	if err != nil {
+		return false
+	}
+
+	if len(modified)%3 != 0 {
+		return false
+	}
+	if len(modified) != len(original) {
 		return false
 	}
 
@@ -408,7 +428,9 @@ func (c *ICommands) ReturnRendered(instructions string) string {
 	}
 
 	devariablized := i.Devariablize(interpreted, variableTokenCount)
+
 	rendered := i.Render(devariablized, 0, &index)
+
 	resolved := c.ResolveInstructions(rendered)
 
 	return resolved
@@ -420,7 +442,11 @@ func (c *ICommands) ReturnRenderedStrict(instructions string) (string, error) {
 		return "", fmt.Errorf("failed to render instructions")
 	}
 	if !ContainsOnlyGlyphs(rendered) {
-		return "", fmt.Errorf("rendered instructions still contain operands near %s", FirstOperandContext(rendered))
+		return "", fmt.Errorf("rendered instructions still contain operands near %s",
+			FirstOperandContext(rendered))
+	}
+	if len(rendered)%3 != 0 {
+		return "", fmt.Errorf("rendered glyph length %d is not divisible by 3", len(rendered))
 	}
 	return rendered, nil
 }

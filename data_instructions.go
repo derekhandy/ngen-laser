@@ -1,3 +1,21 @@
+//
+// Copyright 2026 Derek Handy
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Project can be found at: https://github.com/derekhandy/ngen-laser
+//
+
 package main
 
 import (
@@ -328,7 +346,6 @@ func (i *Instructions) IndexAllVariables(parsed string, iteration int, lV map[st
 	if len(parsed) > maxStringLength {
 		return parsed[:maxStringLength]
 	}
-
 	if *limit <= 0 {
 		return parsed
 	}
@@ -341,23 +358,19 @@ func (i *Instructions) IndexAllVariables(parsed string, iteration int, lV map[st
 				break
 			}
 		}
-
 		if strings.Contains(parsed, varStr) {
 			for j := 0; j < len(parsed); j++ {
 				if string(parsed[j]) == varStr {
 					*limit--
-
 					indexed := i.IndexVariable(parsed, j, true)
 					if indexed == parsed {
 						continue
 					}
-
 					return i.IndexAllVariables(indexed, iter, lV, limit)
 				}
 			}
 		}
 	}
-
 	return parsed
 }
 
@@ -371,15 +384,21 @@ func (i *Instructions) IndexVariable(s string, idx int, reverse bool) string {
 		return s
 	}
 
+	_, _, lookupStart, lookupEnd, ok := ParseIndexDefinition(s, defIdx)
+	if !ok {
+		return s
+	}
+
 	prefix := s[:defIdx]
-	_, _, lookupStart, lookupEnd, _ := ParseIndexDefinition(s, defIdx)
 	lookup := s[lookupStart:lookupEnd]
-	suffix := s[lookupStart:]
-	if !strings.Contains(suffix, varStr) {
+	tail := s[lookupEnd:]
+
+	if !strings.Contains(tail, varStr) {
 		return "+"
 	}
-	suffix = strings.ReplaceAll(suffix, varStr, lookup)
-	return prefix + suffix
+
+	tail = strings.Replace(tail, varStr, lookup, -1)
+	return prefix + lookup + tail
 }
 
 func ParseIndexDefinition(s string, idx int) (int, string, int, int, bool) {

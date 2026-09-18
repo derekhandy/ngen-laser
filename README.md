@@ -277,7 +277,7 @@ For a deeper description of the network itself, see [`docs/ARCHITECTURE.md`](doc
 `.lzr` packages use a custom framing:
 
 - Header starts with `‰LASER`
-- Package framing begins with `LASER-PACKAGE-V3\x00`
+- Package framing begins with `LASER-PACKAGE-V4\x00`
 - Records contain three length-prefixed fields:
   1. part name
   2. archived relative path

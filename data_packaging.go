@@ -1,3 +1,21 @@
+//
+// Copyright 2026 Derek Handy
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Project can be found at: https://github.com/derekhandy/ngen-laser
+//
+
 package main
 
 import (
@@ -15,8 +33,6 @@ import (
 const laserheader = "‰LASER"
 const laserseperator = "+"
 const laserfooter = "PACKAGE¸"
-
-var packageFormat = []byte("LASER-PACKAGE-V3\x00")
 
 type packageRecord struct {
 	name         string
@@ -49,7 +65,14 @@ func WriteNetworkOutput(container *Container, instructions string, path string) 
 	if !strings.HasSuffix(path, ".isp~") {
 		return fmt.Errorf("write network output %s: expected .isp~ temporary part path", path)
 	}
+
 	outputPath := strings.TrimSuffix(path, "~")
+
+	if _, err := NewICommands().ReturnRenderedStrict(instructions); err != nil {
+		fmt.Fprintf(os.Stderr, "[write] .isp %s FAILS validation: %v\n", outputPath, err)
+		return fmt.Errorf("write network output %s: %v", outputPath, err)
+	}
+
 	if err := os.WriteFile(outputPath, []byte(instructions), 0644); err != nil {
 		return fmt.Errorf("write network output %s: %w", path, err)
 	}
@@ -541,6 +564,22 @@ func MakePackage(tree *Tree) error {
 
 			bin := InstructionsToBytesRuntime(string(data))
 
+			decoded, err := DecodeBitOpsBinary(bin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[pack] %s decode failed: %v\n", f.Name(), err)
+				return err
+			}
+			glyphOps, err := BitsAndOperandsToGlyphs(strings.TrimSpace(string(decoded)))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[pack] %s glyph round-trip failed: %v\n", f.Name(), err)
+				return err
+			}
+			if glyphOps != string(data) {
+				fmt.Fprintf(os.Stderr, "[pack] ROUND TRIP MISMATCH %s: orig=%d roundtrip=%d firstDiff=%d\n",
+					f.Name(), len(data), len(glyphOps), firstDiffIndex(string(data), glyphOps))
+				return fmt.Errorf("binary codec lost data for %s", f.Name())
+			}
+
 			relativePath := b.RelativePath
 			if relativePath == "" {
 				var err error
@@ -586,6 +625,19 @@ func MakePackage(tree *Tree) error {
 	}
 
 	return nil
+}
+
+func firstDiffIndex(a, b string) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+	return n
 }
 
 // 2403 is a constant.

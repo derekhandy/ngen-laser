@@ -20,14 +20,20 @@ package main
 
 import "testing"
 
-func TestDefaultMemoryConfigUsesCustomHiddenSizeForRecurrentState(t *testing.T) {
-	for _, hiddenSize := range []int{64, 256} {
-		config := DefaultMemoryConfig(hiddenSize)
-		if config.rCfg.HiddenSize != hiddenSize {
-			t.Fatalf("hidden size %d: recurrent size = %d", hiddenSize, config.rCfg.HiddenSize)
-		}
-		if config.aCfg.HiddenSize != hiddenSize {
-			t.Fatalf("hidden size %d: attention size = %d", hiddenSize, config.aCfg.HiddenSize)
+func TestMagnitudeOperandRoundTrip(t *testing.T) {
+	ops := []byte{'e', 'm', 'd', 'b', 'o', 'x', 'y', 'z'}
+	for _, op := range ops {
+		for mag := 1; mag <= 9; mag++ {
+			original := string([]byte{op, byte('0' + mag)})
+			encoded := EncodeBitOpsBinary([]byte(original))
+			decoded, err := DecodeBitOpsBinary(encoded)
+			if err != nil {
+				t.Fatalf("%s: decode failed: %v", original, err)
+			}
+			if string(decoded) != original {
+				t.Fatalf("%s%d round-trip: got %q, want %q",
+					string(op), mag, string(decoded), original)
+			}
 		}
 	}
 }

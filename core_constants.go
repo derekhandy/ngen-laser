@@ -1,9 +1,29 @@
+//
+// Copyright 2026 Derek Handy
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Project can be found at: https://github.com/derekhandy/ngen-laser
+//
+
 package main
 
 type PacketTokenKind uint8
 
 const (
 	seed = 777
+
+	bitOpsVersion byte = 4
 
 	packetSize          = 27648
 	maxStringLength     = 500000
@@ -15,6 +35,8 @@ const (
 	coordinateLength = 3
 	lineLength       = 6
 
+	// NOTE: variableTokenCount + compactOperandVarBase must stay <= 0xFF.
+	// Currently 0xDF + 26 = 0xF9, leaving 6 bytes of headroom.
 	variableTokenCount   = 26
 	variableMaxMagnitude = 200
 
@@ -30,16 +52,20 @@ const (
 	PacketTokenVariableRef
 	PacketTokenRawOperandRun
 
-	compactOperandFixedBase byte = 0x80
-	compactOperandMagBase   byte = 0x85
-	compactOperandDirBase   byte = 0xC4
-	compactOperandRotBase   byte = 0xD0
-	compactOperandIndex     byte = 0xD3
-	compactOperandIndexLong byte = 0xD4
-	compactOperandRawRun    byte = 0xD5
-	compactOperandVarBase   byte = 0xD6
-	compactOperandIndexVar  byte = 0xF0
-	compactBitRunMax             = 128
+	compactOperandFixedBase  byte = 0x80
+	compactOperandFixedCount      = 5 // h k n g l
+	compactOperandMagBase    byte = compactOperandFixedBase + compactOperandFixedCount
+	compactOperandMagCount        = 72 // 8 ops × 9 magnitudes
+	compactOperandDirBase    byte = compactOperandMagBase + compactOperandMagCount
+	compactOperandDirCount        = 12 // 6 directions × 2 ops
+	compactOperandRotBase    byte = compactOperandDirBase + compactOperandDirCount
+	compactOperandRotCount        = 3
+	compactOperandIndex      byte = compactOperandRotBase + compactOperandRotCount
+	compactOperandIndexLong  byte = compactOperandIndex + 1
+	compactOperandRawRun     byte = compactOperandIndexLong + 1
+	compactOperandVarBase    byte = compactOperandRawRun + 1
+	compactOperandIndexVar   byte = compactOperandVarBase + byte(variableTokenCount)
+	compactBitRunMax              = 128
 
 	crossoverMutateChance = 0.9
 
@@ -51,7 +77,8 @@ const (
 var (
 	operandLineLength = 2
 	operandLength     = lineLength * operandLineLength
-	version           = "v1.0.2"
+	version           = "v2.0.0"
+	packageFormat     = []byte("LASER-PACKAGE-v2.0.0\x00")
 )
 
 func UpdateOperandLength(length int) {

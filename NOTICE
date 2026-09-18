@@ -1,5 +1,80 @@
 LASER
-Copyright 2027 Derek Handy
+Copyright 2026 Derek Handy
 
-This product includes software developed at
-[LASER] (https://github.com/derekhandy/ngen-laser).
+This product includes software developed by
+Derek Handy (https://github.com/derekhandy/<repo>).
+
+---
+
+Runtime components:
+
+The distributed binaries statically link the Go standard library and
+runtime.
+
+Go standard library (https://go.dev)
+Copyright (c) 2009 The Go Authors. All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://go.dev/LICENSE
+
+---
+
+Third-party dependencies:
+
+github.com/google/uuid
+Copyright (c) 2009, 2014 Google Inc. All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://github.com/google/uuid/blob/master/LICENSE
+
+github.com/shirou/gopsutil/v3
+Copyright (c) 2014, WAKAYAMA Shirou
+All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://github.com/shirou/gopsutil/blob/master/LICENSE
+
+Portions of gopsutil are derived from the Go standard library:
+internal/common/binary.go in gopsutil is copied and modified from
+golang/encoding/binary.go.
+Copyright (c) 2009 The Go Authors. All rights reserved.
+Licensed under the BSD 3-Clause License.
+
+github.com/go-ole/go-ole
+Copyright (c) 2013-2017 Yasuhiro Matsumoto
+Licensed under the MIT License.
+https://github.com/go-ole/go-ole/blob/master/LICENSE
+
+github.com/lufia/plan9stats
+Copyright (c) 2019, KADOTA, Kyohei
+All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://github.com/lufia/plan9stats/blob/main/LICENSE
+
+github.com/power-devops/perfstat
+Copyright (c) 2020 Power DevOps
+Licensed under the MIT License.
+https://github.com/power-devops/perfstat/blob/main/LICENSE
+
+github.com/shoenig/go-m1cpu
+Copyright (c) 2023 The go-m1cpu Authors
+Licensed under the Mozilla Public License, v. 2.0.
+https://github.com/shoenig/go-m1cpu/blob/main/LICENSE
+
+github.com/tklauser/go-sysconf
+Copyright (c) 2018-2022, Tobias Klauser
+All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://github.com/tklauser/go-sysconf/blob/master/LICENSE
+
+github.com/tklauser/numcpus
+Copyright (c) 2018-2021, Tobias Klauser
+Licensed under the Apache License, Version 2.0.
+https://github.com/tklauser/numcpus/blob/master/LICENSE
+
+github.com/yusufpapurcu/wmi
+Copyright (c) 2013 Stack Exchange
+Licensed under the MIT License.
+https://github.com/yusufpapurcu/wmi/blob/master/LICENSE
+
+golang.org/x/sys
+Copyright 2009 The Go Authors. All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://cs.opensource.google/go/x/sys/+/master:LICENSE

@@ -1,7 +1,7 @@
 {
     "iterationLimit": 1,
     "numOfGenerations": 20,
-    "populationSize": 150,
+    "populationSize": 100,
     "mutationPercent": 0.05,
     "mutationStrength": 0.08,
     "dynamicTemperature": false,
