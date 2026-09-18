@@ -199,13 +199,13 @@ func newCommandRollout(dataDirOverride string, isGUI bool) (*Rollout, error) {
 
 func PrintUsage() {
 	fmt.Printf("\n\nlaser %s\n\t\t", version)
-	fmt.Print("\n\t|\ttrain <path> [-t <comp-ratio>] [--deflate-fitness]\t\n\t|\tTrain neural networks on data at <path>.")
-	fmt.Print("\n\n\t|\tpack <path>\t\n\t|\tUse saved networks to compress data at <path>.")
-	fmt.Print("\n\n\t|\tpack -c <path> <var-max>,<iteration-max>\t\n\t|\tCompute compression with saved networks.")
-	fmt.Print("\n\n\t|\tunpack <file>\t\n\t|\tDecompresses .lzr files back to original.")
-	fmt.Print("\n\n\t|\t--data-dir <path>\t\n\t|\tOverride the data directory (config, weights, analytics).")
+	fmt.Print("\n\t|\ttrain <path> [-t <comp-ratio>] [--deflate-fitness]\t\n\t|\tTrain neural networks on data at <path>.\n")
+	fmt.Print("\n\n\t|\tpack <path>\t\n\t|\tUse saved networks to compress data at <path>.\n")
+	fmt.Print("\n\n\t|\tpack -c <path> <var-max>,<iteration-max>\t\n\t|\tCompute compression with saved networks.\n")
+	fmt.Print("\n\n\t|\tunpack <file>\t\n\t|\tDecompresses .lzr files back to original.\n")
+	fmt.Print("\n\n\t|\t--data-dir <path>\t\n\t|\tOverride the data directory (config, weights, analytics).\n")
 	fmt.Print("\n\n\t|\t--cpus <n>\t\n\t|\tLimit concurrent workers (default: number of CPU cores).\n")
-	fmt.Print("\n\n\t|\t--deflate-fitness\t\n\t|\tUse DEFLATE size as the training signal (slower, more accurate). Default: bit-ops size.\n")
+	fmt.Print("\n\n\t|\t--deflate-fitness\t\n\t|\tUse DEFLATE size as the compression metric. Default: bit-ops size.\n")
 	fmt.Print("\n\n\t|\t--codec <name>\t\n\t|\tDownstream compressor for pack. Default: none.\n")
 	fmt.Print("\n\n")
 }
