@@ -34,6 +34,31 @@ func operandDigitLength() int {
 	return operandLength
 }
 
+// parseMagnitude reads the magnitude value that follows a magnitude operand
+// at position j in s. Returns the value and the number of digits consumed
+// (1 or 2). A two-digit value is only recognized when it falls in the
+// 10-31 range, so a lone "3" reads as 3 while "30" reads as 30 and "32"
+// reads as 3 followed by a second glyph.
+func parseMagnitude(s string, j int) (int, int, bool) {
+	if j+1 >= len(s) {
+		return 0, 0, false
+	}
+	d1 := s[j+1]
+	if d1 < '1' || d1 > '9' {
+		return 0, 0, false
+	}
+	if j+2 < len(s) {
+		d2 := s[j+2]
+		if d2 >= '0' && d2 <= '9' {
+			combined := int(d1-'0')*10 + int(d2-'0')
+			if combined >= 10 && combined <= 31 {
+				return combined, 2, true
+			}
+		}
+	}
+	return int(d1 - '0'), 1, true
+}
+
 func NewInstructions() *Instructions {
 	guard := NewGuard(50)
 	return &Instructions{guard: &guard}
@@ -160,38 +185,18 @@ func (i *Instructions) MendWithlimit(instructions, operand string, iteration int
 			segments[1] = "+"
 		}
 		addition = 1
-	case "e":
-		if j+1 >= len(instructions) {
+	case "e", "o", "b":
+		v, digits, ok := parseMagnitude(instructions, j)
+		if !ok || j-v < 0 {
 			segments[1] = "+"
 			break
 		}
-		v, err := strconv.Atoi(string(instructions[j+1]))
-		if err != nil || v <= 0 || j-v < 0 {
-			segments[1] = "+"
-			break
-		}
-		tailStart := j + 1 + v + 1
+		tailStart := j + 1 + digits + v
 		if tailStart > len(instructions) {
 			tailStart = len(instructions)
 		}
 		segments[1] = strconv.Itoa(v) + instructions[tailStart:]
-		addition = 2
-	case "o":
-		if j+1 >= len(instructions) {
-			segments[1] = "+"
-			break
-		}
-		v, err := strconv.Atoi(string(instructions[j+1]))
-		if err != nil || v <= 0 || j+1+v > len(instructions) {
-			segments[1] = "+"
-			break
-		}
-		tailStart := j + 1 + v + 1
-		if tailStart > len(instructions) {
-			tailStart = len(instructions)
-		}
-		segments[1] = strconv.Itoa(v) + instructions[tailStart:]
-		addition = 2
+		addition = 1 + digits
 	case "t":
 		if j+1 >= len(instructions) {
 			segments[1] = "+"
@@ -219,18 +224,19 @@ func (i *Instructions) MendWithlimit(instructions, operand string, iteration int
 		}
 		addition = 2
 	case "x", "y", "z":
-		if j+1 >= len(instructions) {
+		v, digits, ok := parseMagnitude(instructions, j)
+		if !ok {
 			segments[1] = "+"
 			break
 		}
-		v := string(instructions[j+1])
-		tailStart := j + 2 + operandDigitLength()
+		_ = v
+		tailStart := j + 1 + digits + operandDigitLength()
 		if tailStart <= len(instructions) {
-			segments[1] = v + instructions[tailStart:]
+			segments[1] = instructions[j+1:j+1+digits] + instructions[tailStart:]
 		} else {
 			segments[1] = "+"
 		}
-		addition = 2
+		addition = 1 + digits
 	case "r":
 		if j+1 < len(instructions) {
 			x := string(instructions[j+1])
@@ -250,39 +256,27 @@ func (i *Instructions) MendWithlimit(instructions, operand string, iteration int
 			lookup := instructions[lookupStart:lookupEnd]
 			segmentsMod := instructions[lookupEnd:]
 			*index = append(*index, IndexEntry{Lookup: lookup, Variable: varStr})
-			segmentsMod = strings.ReplaceAll(segmentsMod, lookup, varStr)
+			segmentsMod = strings.Replace(segmentsMod, lookup, varStr, -1)
 			lengthStr := strconv.Itoa(v)
 			segments[1] = lengthStr + varStr + lookup + segmentsMod
 			addition = len(lengthStr) + 2
 		} else {
 			segments[1] = "+"
 		}
-	case "m":
-		if j+1 >= len(instructions) {
+	case "m", "d":
+		v, digits, ok := parseMagnitude(instructions, j)
+		if !ok {
 			segments[1] = "+"
 			break
 		}
-		val := string(instructions[j+1])
-		tail := j + 2 + operandDigitLength()
+		_ = v
+		tail := j + 1 + digits + operandDigitLength()
 		if tail <= len(instructions) {
-			segments[1] = val + instructions[tail:]
+			segments[1] = instructions[j+1:j+1+digits] + instructions[tail:]
 		} else {
 			segments[1] = "+"
 		}
-		addition = 2
-	case "d":
-		if j+1 >= len(instructions) {
-			segments[1] = "+"
-			break
-		}
-		val := string(instructions[j+1])
-		tail := j + 2 + operandDigitLength()
-		if tail <= len(instructions) {
-			segments[1] = val + instructions[tail:]
-		} else {
-			segments[1] = "+"
-		}
-		addition = 2
+		addition = 1 + digits
 	case "n":
 		if j+1+operandDigitLength() <= len(instructions) {
 			segments[1] = instructions[j+1+operandDigitLength():]
@@ -304,21 +298,20 @@ func (i *Instructions) MendWithlimit(instructions, operand string, iteration int
 			segments[1] = "+"
 		}
 		addition = 1
-	case "b":
-		if j+1 >= len(instructions) {
+	case "s":
+		if j+2 >= len(instructions) {
 			segments[1] = "+"
 			break
 		}
 		v, err := strconv.Atoi(string(instructions[j+1]))
-		if err != nil || v <= 0 || j-v < 0 {
+		if err != nil || v <= 0 || j-v < 0 || j+2+v > len(instructions) {
 			segments[1] = "+"
 			break
 		}
-		tailStart := j + 1 + v + 1
-		if tailStart > len(instructions) {
-			tailStart = len(instructions)
-		}
-		segments[1] = strconv.Itoa(v) + instructions[tailStart:]
+		before := instructions[j-v : j]
+		after := instructions[j+2 : j+2+v]
+		segments[0] = instructions[:j-v]
+		segments[1] = after + instructions[j:j+2] + before + instructions[j+2+v:]
 		addition = 2
 	default:
 		return "+"
@@ -493,7 +486,11 @@ func (i *Instructions) ReverseOperationWithlimit(instructions, p string, iterati
 	switch p {
 	case "x", "y", "z":
 		if j-operandDigitLength() >= 0 {
-			return i.RenderWithlimit(i.Rotate(instructions, iteration, true), j+1+operandDigitLength(), index, limit)
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok {
+				transformed := i.Rotate(instructions, j, v, digits, true)
+				return i.RenderWithlimit(transformed, j+1+digits+operandDigitLength(), index, limit)
+			}
 		}
 	case "h":
 		if j-1 >= 0 {
@@ -505,18 +502,18 @@ func (i *Instructions) ReverseOperationWithlimit(instructions, p string, iterati
 		}
 	case "e":
 		if j+1 < len(instructions) {
-			if n, err := strconv.Atoi(string(instructions[j+1])); err == nil && n > 0 {
-				if j-n >= 0 {
-					return i.RenderWithlimit(i.EchoVariable(instructions, iteration, true), j+n+1, index, limit)
-				}
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok && j-v >= 0 {
+				transformed := i.EchoVariable(instructions, j, v, digits, true)
+				return i.RenderWithlimit(transformed, j+digits+v, index, limit)
 			}
 		}
 	case "o":
 		if j+1 < len(instructions) {
-			if n, err := strconv.Atoi(string(instructions[j+1])); err == nil && n > 0 {
-				if j-1 >= 0 {
-					return i.RenderWithlimit(i.EchoDigitVariable(instructions, iteration, n, true), j+n+1, index, limit)
-				}
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok && j-1 >= 0 {
+				transformed := i.EchoDigitVariable(instructions, j, v, digits, true)
+				return i.RenderWithlimit(transformed, j+digits+v, index, limit)
 			}
 		}
 	case "t":
@@ -540,14 +537,18 @@ func (i *Instructions) ReverseOperationWithlimit(instructions, p string, iterati
 		}
 	case "m":
 		if j+1 < len(instructions) {
-			if j-operandDigitLength() >= 0 {
-				return i.RenderWithlimit(i.Multiply(instructions, iteration, false, true), j+1+operandDigitLength(), index, limit)
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok && j-operandDigitLength() >= 0 {
+				transformed := i.Multiply(instructions, j, false, true, v, digits)
+				return i.RenderWithlimit(transformed, j+1+digits+operandDigitLength(), index, limit)
 			}
 		}
 	case "d":
 		if j+1 < len(instructions) {
-			if j-operandDigitLength() >= 0 {
-				return i.RenderWithlimit(i.Multiply(instructions, iteration, true, true), j+1+operandDigitLength(), index, limit)
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok && j-operandDigitLength() >= 0 {
+				transformed := i.Multiply(instructions, j, true, true, v, digits)
+				return i.RenderWithlimit(transformed, j+1+digits+operandDigitLength(), index, limit)
 			}
 		}
 	case "n":
@@ -564,10 +565,20 @@ func (i *Instructions) ReverseOperationWithlimit(instructions, p string, iterati
 		}
 	case "b":
 		if j+1 < len(instructions) {
-			if n, err := strconv.Atoi(string(instructions[j+1])); err == nil && n > 0 {
-				if j-n >= 0 {
-					return i.RenderWithlimit(i.ReverseVariable(instructions, iteration, true), j+n+1, index, limit)
-				}
+			v, digits, ok := parseMagnitude(instructions, j)
+			if ok && j-v >= 0 {
+				transformed := i.ReverseVariable(instructions, j, v, digits, true)
+				return i.RenderWithlimit(transformed, j+digits+v, index, limit)
+			}
+		}
+	case "s":
+		if j+1 < len(instructions) {
+			v, err := strconv.Atoi(string(instructions[j+1]))
+			if err == nil && v > 0 && j-v >= 0 && j+2+v <= len(instructions) {
+				before := instructions[j-v : j]
+				after := instructions[j+2 : j+2+v]
+				swapped := instructions[:j-v] + after + before + instructions[j+2+v:]
+				return i.RenderWithlimit(swapped, j+v, index, limit)
 			}
 		}
 	}
@@ -589,35 +600,54 @@ func (i *Instructions) Echo(s string, index int, amount int, reverse bool) strin
 	return prefix + digit + segment
 }
 
-func (i *Instructions) EchoVariable(s string, index int, reverse bool) string {
+// EchoVariable reverses an `eN` operand during render. The operand sits at
+// s[index], the magnitude spans s[index+1:index+1+digits], and the v glyphs
+// immediately before the operand are re-inserted in place of the operand
+// and its magnitude. The tail follows at s[index+1+digits:].
+func (i *Instructions) EchoVariable(s string, index int, v int, digits int, reverse bool) string {
+	if v <= 0 || index-v < 0 || index+1+digits > len(s) {
+		return "+"
+	}
 	prefix := s[:index]
-	segment := s[index+2:]
-	v, _ := strconv.Atoi(string(s[index+1]))
-	digits := s[index-v : index]
-	return prefix + digits + segment
+	segment := s[index+1+digits:]
+	digitsSlice := s[index-v : index]
+	return prefix + digitsSlice + segment
 }
 
-func (i *Instructions) EchoDigitVariable(s string, index int, amount int, reverse bool) string {
+// EchoDigitVariable reverses an `oN` operand during render. The operand sits
+// at s[index], the magnitude spans s[index+1:index+1+digits], and the glyph
+// at s[index-1] is repeated v times in place of the operand and its
+// magnitude. The tail follows at s[index+1+digits:].
+func (i *Instructions) EchoDigitVariable(s string, index int, v int, digits int, reverse bool) string {
+	if v <= 0 || index-1 < 0 || index+1+digits > len(s) {
+		return "+"
+	}
 	if string(s[index-1]) == "o" {
 		return "+"
 	}
 	prefix := s[:index]
-	segment := s[index+2:]
-	digits := ""
-	for e := 0; e < amount; e++ {
-		digits += string(s[index-1])
+	segment := s[index+1+digits:]
+	digitsSlice := ""
+	for e := 0; e < v; e++ {
+		digitsSlice += string(s[index-1])
 	}
-	return prefix + digits + segment
+	return prefix + digitsSlice + segment
 }
 
-func (i *Instructions) ReverseVariable(s string, index int, reverse bool) string {
+// ReverseVariable reverses a `bN` operand during render. The operand sits at
+// s[index], the magnitude spans s[index+1:index+1+digits], and the v glyphs
+// immediately before the operand are reversed in place of the operand and
+// its magnitude. The tail follows at s[index+1+digits:].
+func (i *Instructions) ReverseVariable(s string, index int, v int, digits int, reverse bool) string {
+	if v <= 0 || index-v < 0 || index+1+digits > len(s) {
+		return "+"
+	}
 	prefix := s[:index]
-	segment := s[index+2:]
-	v, _ := strconv.Atoi(string(s[index+1]))
-	digits := s[index-v : index]
+	segment := s[index+1+digits:]
+	digitsSlice := s[index-v : index]
 	reversed := ""
-	for i := len(digits) - 1; i >= 0; i-- {
-		reversed += string(digits[i])
+	for i := len(digitsSlice) - 1; i >= 0; i-- {
+		reversed += string(digitsSlice[i])
 	}
 	return prefix + reversed + segment
 }
@@ -830,7 +860,11 @@ func (i *Instructions) Translate2(s string, index int, reverse bool) string {
 	return prefix + segment + suffix
 }
 
-func (i *Instructions) Rotate(s string, index int, reverse bool) string {
+// Rotate reverses an `xN`, `yN`, or `zN` operand during render. The operand
+// sits at s[index], the magnitude spans s[index+1:index+1+digits], the
+// source vector is the operandDigitLength() glyphs immediately before the
+// operand, and the tail begins at s[index+1+digits+operandDigitLength():].
+func (i *Instructions) Rotate(s string, index int, v int, digits int, reverse bool) string {
 	cV := map[string]int{
 		";": 1,
 		".": 2,
@@ -838,12 +872,12 @@ func (i *Instructions) Rotate(s string, index int, reverse bool) string {
 		"-": 4,
 	}
 
-	prefix := s[:index]
-	suffix := ""
-	if index+2 < len(s) {
-		suffix = s[index+2:]
+	if index-operandDigitLength() < 0 || index+1+digits+operandDigitLength() > len(s) {
+		return "+"
 	}
-	segment := ""
+
+	prefix := s[:index]
+	segment := s[index+1+digits+operandDigitLength():]
 
 	vector := s[index-operandDigitLength() : index]
 	axis := string(s[index])
@@ -851,6 +885,9 @@ func (i *Instructions) Rotate(s string, index int, reverse bool) string {
 	var rotated strings.Builder
 	rotated.Grow(len(vector))
 	for lineStart := 0; lineStart < len(vector); lineStart += lineLength {
+		if lineStart+lineLength > len(vector) {
+			return "+"
+		}
 		switch axis {
 		case "x":
 			segment = i.RotateCoordinates(vector[lineStart:lineStart+lineLength], "x", cV)
@@ -867,7 +904,7 @@ func (i *Instructions) Rotate(s string, index int, reverse bool) string {
 		rotated.WriteString(segment)
 	}
 
-	return prefix + rotated.String() + suffix
+	return prefix + rotated.String() + segment
 }
 
 func (i *Instructions) RotateCoordinates(vector, axis string, cV map[string]int) string {
@@ -1010,7 +1047,12 @@ func (i *Instructions) MirrorCoordinates(vector, axis string, cV map[string]int)
 	return result.String()
 }
 
-func (i *Instructions) Multiply(s string, index int, shouldInvert, reverse bool) string {
+// Multiply reverses an `mN` or `dN` operand during render. The operand sits
+// at s[index], the magnitude spans s[index+1:index+1+digits], the source
+// vector is the operandDigitLength() glyphs immediately before the operand,
+// and the tail begins at s[index+1+digits+operandDigitLength():]. When
+// shouldInvert is true, the multiplier is 1/v (the `d` case).
+func (i *Instructions) Multiply(s string, index int, shouldInvert bool, reverse bool, v int, digits int) string {
 	cV := map[string]int{
 		";": -2,
 		".": -1,
@@ -1018,19 +1060,20 @@ func (i *Instructions) Multiply(s string, index int, shouldInvert, reverse bool)
 		"-": 2,
 	}
 
-	prefix := s[:index]
-	suffix := ""
-	if index+2 < len(s) {
-		suffix = s[index+2:]
+	if v <= 0 || index-operandDigitLength() < 0 || index+1+digits+operandDigitLength() > len(s) {
+		return "+"
 	}
 
-	m, _ := strconv.ParseFloat(string(s[index+1]), 32)
+	prefix := s[:index]
+	segment := s[index+1+digits+operandDigitLength():]
+
+	m := float32(v)
 	if shouldInvert {
 		m = 1 / m
 	}
 
-	newValues := i.MultiplyCoordinates(s, index, cV, float32(m))
-	return prefix + newValues + suffix
+	newValues := i.MultiplyCoordinates(s, index, cV, m)
+	return prefix + newValues + segment
 }
 
 func (i *Instructions) MultiplyCoordinates(s string, index int, cV map[string]int, m float32) string {

@@ -194,15 +194,43 @@ func ParseOperandTokenBytes(input []byte, idx int) (PacketToken, int, bool) {
 	case 'h', 'k', 'n', 'g', 'l':
 		return PacketToken{Kind: PacketTokenFixedOperand, Op: input[idx]}, idx + 1, true
 	case 'e', 'm', 'd', 'b', 'o', 'x', 'y', 'z':
-		end := OperandTokenEndBytes(input, idx)
-		if end != idx+2 || idx+1 >= len(input) || input[idx+1] < '1' || input[idx+1] > '9' {
+		if idx+1 >= len(input) {
 			return PacketToken{}, idx, false
+		}
+		d1 := input[idx+1]
+		if d1 < '1' || d1 > '9' {
+			return PacketToken{}, idx, false
+		}
+		mag := uint64(d1 - '0')
+		end := idx + 2
+		if idx+2 < len(input) {
+			d2 := input[idx+2]
+			if d2 >= '0' && d2 <= '9' {
+				combined := int(d1-'0')*10 + int(d2-'0')
+				if combined >= 10 && combined <= 31 {
+					mag = uint64(combined)
+					end = idx + 3
+				}
+			}
 		}
 		return PacketToken{
 			Kind:      PacketTokenMagnitudeOperand,
 			Op:        input[idx],
-			Magnitude: uint64(input[idx+1] - '0'),
+			Magnitude: mag,
 		}, end, true
+	case 's':
+		if idx+1 >= len(input) {
+			return PacketToken{}, idx, false
+		}
+		d1 := input[idx+1]
+		if d1 < '1' || d1 > '9' {
+			return PacketToken{}, idx, false
+		}
+		return PacketToken{
+			Kind:      PacketTokenMagnitudeOperand,
+			Op:        's',
+			Magnitude: uint64(d1 - '0'),
+		}, idx + 2, true
 	case 't', 'f':
 		if idx+1 >= len(input) || !IsDirectionByte(input[idx+1]) {
 			return PacketToken{}, idx, false
@@ -254,11 +282,22 @@ func EncodePacketOperandToken(token PacketToken) []byte {
 			return []byte{compactOperandFixedBase + 4}
 		}
 	case PacketTokenMagnitudeOperand:
-		if token.Magnitude < 1 || token.Magnitude > 9 {
+		if token.Op == 's' {
+			if token.Magnitude < 1 || token.Magnitude > 9 {
+				return nil
+			}
+			return []byte{compactOperandExtended, extSwapBase + byte(token.Magnitude-1)}
+		}
+		magOpIdx := CompactMagnitudeOperandIndex(token.Op)
+		if magOpIdx < 0 {
 			return nil
 		}
-		if magOpIdx := CompactMagnitudeOperandIndex(token.Op); magOpIdx >= 0 {
+		if token.Magnitude >= 1 && token.Magnitude <= 9 {
 			return []byte{compactOperandMagBase + byte(magOpIdx*9+int(token.Magnitude-1))}
+		}
+		if token.Magnitude >= 10 && token.Magnitude <= 31 {
+			slot := byte(magOpIdx)*22 + byte(token.Magnitude-10)
+			return []byte{compactOperandExtended, extMagHiBase + slot}
 		}
 	case PacketTokenDirectionalOperand:
 		if dirIdx := DirectionIndex(token.Direction); dirIdx >= 0 {
@@ -422,9 +461,35 @@ func ReadPacketOperandToken(reader *bytes.Reader, token byte) (PacketToken, erro
 		return PacketToken{Kind: PacketTokenRawOperandRun, Raw: payload}, nil
 	case token >= compactOperandVarBase && token < compactOperandVarBase+byte(variableTokenCount):
 		return PacketToken{Kind: PacketTokenVariableRef, Variable: token - compactOperandVarBase}, nil
+	case token == compactOperandExtended:
+		ext, err := reader.ReadByte()
+		if err != nil {
+			return PacketToken{}, fmt.Errorf("failed to read extended operand byte: %w", err)
+		}
+		return readExtendedOperand(reader, ext)
 	default:
 		return PacketToken{}, fmt.Errorf("binary bitops input has unknown compact operand token 0x%02x", token)
 	}
+}
+
+func readExtendedOperand(reader *bytes.Reader, ext byte) (PacketToken, error) {
+	switch {
+	case ext >= extSwapBase && ext < extSwapMax:
+		return PacketToken{
+			Kind:      PacketTokenMagnitudeOperand,
+			Op:        's',
+			Magnitude: uint64(ext-extSwapBase) + 1,
+		}, nil
+	case ext >= extMagHiBase && ext < extMagHiMax:
+		offset := int(ext - extMagHiBase)
+		ops := []byte{'e', 'm', 'd', 'b', 'o', 'x', 'y', 'z'}
+		return PacketToken{
+			Kind:      PacketTokenMagnitudeOperand,
+			Op:        ops[offset/22],
+			Magnitude: uint64(offset%22 + 10),
+		}, nil
+	}
+	return PacketToken{}, fmt.Errorf("unknown extended operand 0x%02x", ext)
 }
 
 func WritePacketTokenText(out *bytes.Buffer, token PacketToken) {
@@ -453,8 +518,21 @@ func WritePacketTokenText(out *bytes.Buffer, token PacketToken) {
 	}
 }
 
+// PackedInstructionSize returns the size used by the fitness comparison.
+// In SizeModeBitOps (the default) this is the raw bit-ops payload size and
+// matches the pre-DEFLATE behavior. In SizeModeDeflate it runs a real
+// DEFLATE compression on the bit-ops output and returns the compressed
+// length. Callers that need the fast size regardless of mode should call
+// BitOpsInstructionSize directly.
 func PackedInstructionSize(instructions string) int {
-	return len(bitOpsBinaryMagic) + PacketTokensPackedPayloadSize(PacketTokensFromGlyphOperands(instructions))
+	if trainingSizeMode == SizeModeDeflate {
+		return DeflateBitOps(instructions)
+	}
+	return BitOpsInstructionSize(instructions)
+}
+
+func BitOpsInstructionSize(instructions string) int {
+	return PacketTokensPackedPayloadSize(PacketTokensFromGlyphOperands(instructions))
 }
 
 func UVarIntLength(value uint64) int {

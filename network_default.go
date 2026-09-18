@@ -33,6 +33,7 @@ var (
 		"r", "m", "d", "n",
 		"i",
 		"b", "g", "l",
+		"s",
 	}
 	directionClasses = []string{"u", "d", "l", "r", "f", "b"}
 	axisClasses      = []string{"x", "y", "z"}
@@ -48,7 +49,7 @@ var (
 
 func IsStringOperation(operand string) bool {
 	switch operand {
-	case "h", "k", "e", "o", "i", "b", "g", "l":
+	case "h", "k", "e", "o", "i", "b", "g", "l", "s":
 		return true
 	default:
 		return false
@@ -471,7 +472,7 @@ func DecodeNetworkDecision(raw []float32, instructionLength int, r *rand.Rand, r
 			axisIdx = SampleWithTemperature(structured.Rotation.AxisLogits, temp, r)
 		}
 		params["axis"] = axisClasses[axisIdx]
-	case "m", "d", "e", "b", "o":
+	case "m", "d", "e", "b", "o", "s":
 		params["magnitude"] = ToMagnitude(structured.Scaling.Magnitude)
 	case "i":
 		params["length"] = ToIndexLength(structured.Insertion.Length, MaxIndexLengthForInstruction(instructionLength))
@@ -523,8 +524,13 @@ func DecodeNetworkDecision(raw []float32, instructionLength int, r *rand.Rand, r
 	return idx, operand, params
 }
 
+// ToMagnitude converts a [0, 1] sigmoid output into an integer magnitude.
+// Magnitude 1–9 uses the compact single-byte encoding; 10–31 uses the
+// extended prefix. The 30-point span is deliberate: it keeps the magnitude
+// head's learned threshold behaviour meaningful while covering the extended
+// range in one shot.
 func ToMagnitude(value float32) int {
-	return ClampInt(int(value*8+1.5), 1, 9)
+	return ClampInt(int(value*30+1.5), 1, 31)
 }
 
 func ToIndexLength(value float32, maxLength int) int {

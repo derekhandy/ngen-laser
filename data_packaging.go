@@ -20,6 +20,7 @@ package main
 
 import (
 	"bytes"
+	"compress/flate"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -251,7 +252,16 @@ func RestoreDirectoryTo(path string, str string, header string, restoreRoot stri
 		PrintConfirm("fail")
 		return fmt.Errorf("package has unsupported framing")
 	}
-	records, err := parsePackageRecords(data[len(packageFormat):])
+
+	// Codec byte sits immediately after the format marker.
+	codecOffset := len(packageFormat)
+	if len(data) < codecOffset+1 {
+		PrintConfirm("fail")
+		return fmt.Errorf("package is missing the codec byte")
+	}
+	codec := PackageCodec(data[codecOffset])
+
+	records, err := parsePackageRecords(data[codecOffset+1:])
 	if err != nil {
 		PrintConfirm("fail")
 		return err
@@ -260,7 +270,6 @@ func RestoreDirectoryTo(path string, str string, header string, restoreRoot stri
 	pathRegistry := make(map[string]map[int][]byte)
 
 	for _, record := range records {
-		name := record.name
 		archivedPath := record.archivedPath
 		filePath, err := restorePathWithinRoot(restoreRoot, archivedPath)
 		if err != nil {
@@ -270,30 +279,51 @@ func RestoreDirectoryTo(path string, str string, header string, restoreRoot stri
 
 		fmt.Print("\n" + filePath + "\n")
 
-		data, err := RestoreFileRuntime(record.payload)
+		raw, err := DecompressPayload([]byte(record.payload), codec)
 		if err != nil {
 			PrintConfirm("fail")
-			return fmt.Errorf("invalid payload for %s: %w", name, err)
+			return fmt.Errorf("decompress container %s: %w", archivedPath, err)
 		}
 
-		cleanName := strings.TrimPrefix(name, "part")
-		cleanName = strings.TrimSuffix(cleanName, ".isp")
-
-		idx, err := strconv.Atoi(cleanName)
-		if err != nil || idx < 0 {
+		reader := bytes.NewReader(raw)
+		numParts, err := readUint32LE(reader)
+		if err != nil {
 			PrintConfirm("fail")
-			return fmt.Errorf("index parsing error on %s", name)
+			return fmt.Errorf("read part count for %s: %w", archivedPath, err)
 		}
 
 		if pathRegistry[filePath] == nil {
 			pathRegistry[filePath] = make(map[int][]byte)
 		}
-		if _, exists := pathRegistry[filePath][idx]; exists {
-			PrintConfirm("fail")
-			return fmt.Errorf("duplicate part index %d for %s", idx, filePath)
-		}
 
-		pathRegistry[filePath][idx] = data
+		for i := uint32(0); i < numParts; i++ {
+			partLen, err := readUint32LE(reader)
+			if err != nil {
+				PrintConfirm("fail")
+				return fmt.Errorf("read part %d length for %s: %w", i, archivedPath, err)
+			}
+			if uint64(partLen) > uint64(reader.Len()) {
+				PrintConfirm("fail")
+				return fmt.Errorf("part %d length %d exceeds remaining payload %d", i, partLen, reader.Len())
+			}
+			partBytes := make([]byte, partLen)
+			if _, err := io.ReadFull(reader, partBytes); err != nil {
+				PrintConfirm("fail")
+				return fmt.Errorf("read part %d bytes for %s: %w", i, archivedPath, err)
+			}
+
+			partData, err := RestoreFileRuntime(string(partBytes))
+			if err != nil {
+				PrintConfirm("fail")
+				return fmt.Errorf("invalid payload for part%d.isp: %w", i, err)
+			}
+
+			if _, exists := pathRegistry[filePath][int(i)]; exists {
+				PrintConfirm("fail")
+				return fmt.Errorf("duplicate part index %d for %s", i, filePath)
+			}
+			pathRegistry[filePath][int(i)] = partData
+		}
 	}
 
 	PrintConfirm("pass")
@@ -334,18 +364,42 @@ func RestoreDirectoryTo(path string, str string, header string, restoreRoot stri
 
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			PrintConfirm("fail")
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			return fmt.Errorf("Failed to create directory %s: %w", dir, err)
 		}
 
 		if err := os.WriteFile(filePath, data, 0644); err != nil {
 			PrintConfirm("fail")
-			return fmt.Errorf("failed to write file %s: %w", filePath, err)
+			return fmt.Errorf("Failed to write file %s: %w", filePath, err)
 		}
 	}
 
 	PrintConfirm("pass")
 
 	return nil
+}
+
+func containerPartIndex(name string) int {
+	base := strings.TrimSuffix(name, ".isp")
+	base = strings.TrimPrefix(base, "part")
+	idx, err := strconv.Atoi(base)
+	if err != nil {
+		return 1 << 30
+	}
+	return idx
+}
+
+func writeUint32LE(buf *bytes.Buffer, v uint32) {
+	var b [4]byte
+	binary.LittleEndian.PutUint32(b[:], v)
+	buf.Write(b[:])
+}
+
+func readUint32LE(r *bytes.Reader) (uint32, error) {
+	var b [4]byte
+	if _, err := io.ReadFull(r, b[:]); err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(b[:]), nil
 }
 
 func parsePackageRecords(data []byte) ([]packageRecord, error) {
@@ -534,25 +588,33 @@ func BuildPackage(tree *Tree) error {
 }
 
 func MakePackage(tree *Tree) error {
+	if tree == nil {
+		return fmt.Errorf("cannot build package from nil tree")
+	}
 	basePath := tree.Path + "/" + tree.Name + ".lzr"
 
-	contents := map[int][]byte{}
+	// Slice, not map, so serialization is deterministic across runs.
+	var contents [][]byte
 	var filesToRemove []string
 
-	count := 0
 	for _, b := range tree.Containers {
 		dir, err := os.ReadDir(b.TmpPath)
 		if err != nil {
 			return fmt.Errorf("read container %s: %w", b.TmpPath, err)
 		}
 
-		var files []string
+		type partEntry struct {
+			name string
+			path string
+			data []byte
+		}
+		var parts []partEntry
+
 		for _, f := range dir {
 			fPath := b.TmpPath + "/" + f.Name()
 			if f.IsDir() {
 				return fmt.Errorf("unexpected directory %s in container %s", f.Name(), b.TmpPath)
 			}
-
 			if filepath.Ext(f.Name()) != ".isp" {
 				return fmt.Errorf("unexpected file %s in container %s", f.Name(), b.TmpPath)
 			}
@@ -561,53 +623,54 @@ func MakePackage(tree *Tree) error {
 			if err != nil {
 				return fmt.Errorf("read packaged part %s: %w", fPath, err)
 			}
-
-			bin := InstructionsToBytesRuntime(string(data))
-
-			decoded, err := DecodeBitOpsBinary(bin)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[pack] %s decode failed: %v\n", f.Name(), err)
-				return err
-			}
-			glyphOps, err := BitsAndOperandsToGlyphs(strings.TrimSpace(string(decoded)))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[pack] %s glyph round-trip failed: %v\n", f.Name(), err)
-				return err
-			}
-			if glyphOps != string(data) {
-				fmt.Fprintf(os.Stderr, "[pack] ROUND TRIP MISMATCH %s: orig=%d roundtrip=%d firstDiff=%d\n",
-					f.Name(), len(data), len(glyphOps), firstDiffIndex(string(data), glyphOps))
-				return fmt.Errorf("binary codec lost data for %s", f.Name())
-			}
-
-			relativePath := b.RelativePath
-			if relativePath == "" {
-				var err error
-				relativePath, err = filepath.Rel(filepath.Join(tree.Path, tree.Name), b.FullPath)
-				if err != nil {
-					return fmt.Errorf("derive archive path: %w", err)
-				}
-				relativePath = filepath.ToSlash(relativePath)
-			}
-			relativePath, err = cleanArchivePath(relativePath)
-			if err != nil {
-				return fmt.Errorf("validate archive path: %w", err)
-			}
-			relativePath = filepath.ToSlash(relativePath)
-
-			cont := encodePackageRecord(f.Name(), relativePath, bin)
-
-			contents[count] = cont
-			count++
-
-			files = append(files, fPath)
+			parts = append(parts, partEntry{name: f.Name(), path: fPath, data: data})
 		}
 
-		filesToRemove = append(filesToRemove, files...)
+		sort.Slice(parts, func(i, j int) bool {
+			return containerPartIndex(parts[i].name) < containerPartIndex(parts[j].name)
+		})
+
+		// Concatenate all parts of this container with 4-byte length
+		// prefixes, then run the selected codec over the whole buffer.
+		// This exposes cross-part redundancy to the downstream codec.
+		var raw bytes.Buffer
+		writeUint32LE(&raw, uint32(len(parts)))
+		for _, p := range parts {
+			bin := InstructionsToBytesRuntime(string(p.data))
+			writeUint32LE(&raw, uint32(len(bin)))
+			raw.Write(bin)
+			filesToRemove = append(filesToRemove, p.path)
+		}
+
+		compressed, err := CompressPayload(raw.Bytes(), packagingCodec)
+		if err != nil {
+			return fmt.Errorf("compress container %s: %w", b.TmpPath, err)
+		}
+
+		relativePath := b.RelativePath
+		if relativePath == "" {
+			var err error
+			relativePath, err = filepath.Rel(filepath.Join(tree.Path, tree.Name), b.FullPath)
+			if err != nil {
+				return fmt.Errorf("derive archive path: %w", err)
+			}
+			relativePath = filepath.ToSlash(relativePath)
+		}
+		relativePath, err = cleanArchivePath(relativePath)
+		if err != nil {
+			return fmt.Errorf("validate archive path: %w", err)
+		}
+		relativePath = filepath.ToSlash(relativePath)
+
+		recordName := b.Name
+		if recordName == "" {
+			recordName = "_container"
+		}
+		contents = append(contents, encodePackageRecord(recordName, relativePath, compressed))
 	}
 
 	final := append([]byte(nil), packageFormat...)
-
+	final = append(final, byte(packagingCodec))
 	for _, b := range contents {
 		final = append(final, b...)
 	}
@@ -625,6 +688,64 @@ func MakePackage(tree *Tree) error {
 	}
 
 	return nil
+}
+
+// CompressPayload applies the selected downstream codec to a container's
+// bit-ops payload. The result is what gets written into the record's payload
+// field. Codecs that are declared but not yet implemented return an error so
+// the caller fails loudly rather than writing an undecodable archive.
+func CompressPayload(data []byte, codec PackageCodec) ([]byte, error) {
+	switch codec {
+	case CodecRaw:
+		out := make([]byte, len(data))
+		copy(out, data)
+		return out, nil
+	case CodecDeflate:
+		var buf bytes.Buffer
+		w, err := flate.NewWriter(&buf, flate.DefaultCompression)
+		if err != nil {
+			return nil, fmt.Errorf("init deflate writer: %w", err)
+		}
+		if _, err := w.Write(data); err != nil {
+			w.Close()
+			return nil, fmt.Errorf("deflate write: %w", err)
+		}
+		if err := w.Close(); err != nil {
+			return nil, fmt.Errorf("deflate close: %w", err)
+		}
+		return buf.Bytes(), nil
+	case CodecZstd:
+		return nil, fmt.Errorf("codec zstd is reserved but not yet implemented")
+	case CodecXz:
+		return nil, fmt.Errorf("codec xz is reserved but not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown codec 0x%02x", byte(codec))
+	}
+}
+
+// DecompressPayload reverses CompressPayload for the codec identified by the
+// archive's codec byte.
+func DecompressPayload(data []byte, codec PackageCodec) ([]byte, error) {
+	switch codec {
+	case CodecRaw:
+		out := make([]byte, len(data))
+		copy(out, data)
+		return out, nil
+	case CodecDeflate:
+		r := flate.NewReader(bytes.NewReader(data))
+		defer r.Close()
+		out, err := io.ReadAll(r)
+		if err != nil {
+			return nil, fmt.Errorf("inflate payload: %w", err)
+		}
+		return out, nil
+	case CodecZstd:
+		return nil, fmt.Errorf("codec zstd is reserved but not yet implemented")
+	case CodecXz:
+		return nil, fmt.Errorf("codec xz is reserved but not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown codec 0x%02x", byte(codec))
+	}
 }
 
 func firstDiffIndex(a, b string) int {

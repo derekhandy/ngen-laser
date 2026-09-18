@@ -214,38 +214,50 @@ func AxisIndex(axis byte) int {
 	return -1
 }
 
-func OperandTokenEndBytes(input []byte, idx int) int {
-	if idx >= len(input) {
+func OperandTokenEnd(s string, idx int) int {
+	if idx >= len(s) {
 		return idx
 	}
 
-	switch input[idx] {
+	switch s[idx] {
 	case 'h', 'k', 'n', 'g', 'l':
 		return idx + 1
-	case 'm', 'b', 'o', 'e', 'd', 'x', 'y', 'z':
-		if idx+2 < len(input) && input[idx+1] == '1' && input[idx+2] == '0' && (idx+3 >= len(input) || !IsBitByte(input[idx+3])) {
-			return idx + 3
+	case 'e', 'm', 'd', 'b', 'o', 'x', 'y', 'z':
+		if idx+1 >= len(s) {
+			return idx + 1
 		}
-		if idx+1 < len(input) && input[idx+1] >= '0' && input[idx+1] <= '9' {
+		d1 := s[idx+1]
+		if d1 < '1' || d1 > '9' {
+			return idx + 1
+		}
+		if idx+2 < len(s) {
+			d2 := s[idx+2]
+			if d2 >= '0' && d2 <= '9' {
+				combined := int(d1-'0')*10 + int(d2-'0')
+				if combined >= 10 && combined <= 31 {
+					return idx + 3
+				}
+			}
+		}
+		return idx + 2
+	case 's':
+		if idx+1 < len(s) && s[idx+1] >= '1' && s[idx+1] <= '9' {
 			return idx + 2
 		}
 		return idx + 1
 	case 't', 'f':
-		if idx+1 < len(input) && IsDirectionByte(input[idx+1]) {
+		if idx+1 < len(s) && IsDirectionByte(s[idx+1]) {
 			return idx + 2
 		}
 		return idx + 1
 	case 'r':
-		if idx+1 < len(input) && IsAxisByte(input[idx+1]) {
+		if idx+1 < len(s) && IsAxisByte(s[idx+1]) {
 			return idx + 2
 		}
 		return idx + 1
 	case 'i':
-		end := idx + 1
-		for end < len(input) && input[end] >= '0' && input[end] <= '9' {
-			end++
-		}
-		if end < len(input) && IsVariableByte(input[end]) {
+		end := ConsumeDigits(s, idx+1)
+		if end < len(s) && IsVariableByte(s[end]) {
 			end++
 		}
 		if end == idx+1 {
@@ -365,35 +377,53 @@ func GlyphFromBits(bits string) (byte, bool) {
 	}
 }
 
-func OperandTokenEnd(s string, idx int) int {
-	if idx >= len(s) {
+func OperandTokenEndBytes(input []byte, idx int) int {
+	if idx >= len(input) {
 		return idx
 	}
 
-	switch s[idx] {
+	switch input[idx] {
 	case 'h', 'k', 'n', 'g', 'l':
 		return idx + 1
-	case 'm', 'b', 'o', 'e', 'd', 'x', 'y', 'z':
-		if idx+2 < len(s) && s[idx+1] == '1' && s[idx+2] == '0' && (idx+3 >= len(s) || !IsBitByte(s[idx+3])) {
-			return idx + 3
+	case 'e', 'm', 'd', 'b', 'o', 'x', 'y', 'z':
+		if idx+1 >= len(input) {
+			return idx + 1
 		}
-		if idx+1 < len(s) && s[idx+1] >= '0' && s[idx+1] <= '9' {
+		d1 := input[idx+1]
+		if d1 < '1' || d1 > '9' {
+			return idx + 1
+		}
+		if idx+2 < len(input) {
+			d2 := input[idx+2]
+			if d2 >= '0' && d2 <= '9' {
+				combined := int(d1-'0')*10 + int(d2-'0')
+				if combined >= 10 && combined <= 31 {
+					return idx + 3
+				}
+			}
+		}
+		return idx + 2
+	case 's':
+		if idx+1 < len(input) && input[idx+1] >= '1' && input[idx+1] <= '9' {
 			return idx + 2
 		}
 		return idx + 1
 	case 't', 'f':
-		if idx+1 < len(s) && IsDirectionByte(s[idx+1]) {
+		if idx+1 < len(input) && IsDirectionByte(input[idx+1]) {
 			return idx + 2
 		}
 		return idx + 1
 	case 'r':
-		if idx+1 < len(s) && IsAxisByte(s[idx+1]) {
+		if idx+1 < len(input) && IsAxisByte(input[idx+1]) {
 			return idx + 2
 		}
 		return idx + 1
 	case 'i':
-		end := ConsumeDigits(s, idx+1)
-		if end < len(s) && IsVariableByte(s[end]) {
+		end := idx + 1
+		for end < len(input) && input[end] >= '0' && input[end] <= '9' {
+			end++
+		}
+		if end < len(input) && IsVariableByte(input[end]) {
 			end++
 		}
 		if end == idx+1 {

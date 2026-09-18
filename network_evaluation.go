@@ -96,6 +96,7 @@ type populationEvalResult struct {
 	fitness         float32
 	candidateString string
 	bestString      string
+	bestPackedSize  int
 	bestChain       []ChainStep
 	err             error
 }
@@ -113,7 +114,7 @@ func EvaluatePopulationParallel(rollout *Rollout, size int, baseEnv *Compression
 		EnsureNetworkMemory(population[i])
 	}
 
-	workerCount := runtime.NumCPU()
+	workerCount := trainingWorkerLimit
 	if workerCount < 1 {
 		workerCount = 1
 	}
@@ -164,9 +165,14 @@ func EvaluatePopulationParallel(rollout *Rollout, size int, baseEnv *Compression
 				}
 				bestString := workingEnv.bestString
 				bestChain := workingEnv.bestChain
+				bestPackedSize := workingEnv.bestPackedSize
 				if bestString == "" {
 					bestString = str
 					bestChain = chain
+					bestPackedSize = 0
+				}
+				if bestPackedSize <= 0 && bestString != "" && bestString != "+" {
+					bestPackedSize = PackedInstructionSize(bestString)
 				}
 
 				results <- populationEvalResult{
@@ -174,6 +180,7 @@ func EvaluatePopulationParallel(rollout *Rollout, size int, baseEnv *Compression
 					fitness:         score,
 					candidateString: str,
 					bestString:      bestString,
+					bestPackedSize:  bestPackedSize,
 					bestChain:       CloneChainSteps(bestChain),
 				}
 			}
@@ -196,6 +203,15 @@ func EvaluatePopulationParallel(rollout *Rollout, size int, baseEnv *Compression
 	}
 
 	return output
+}
+
+var trainingWorkerLimit = runtime.NumCPU()
+
+func SetTrainingWorkerLimit(n int) {
+	if n < 1 {
+		n = 1
+	}
+	trainingWorkerLimit = n
 }
 
 func ResultBestPackedSize(bestString string, fallbackPackedSize int) int {

@@ -69,6 +69,11 @@ Copyright (c) 2018-2021, Tobias Klauser
 Licensed under the Apache License, Version 2.0.
 https://github.com/tklauser/numcpus/blob/master/LICENSE
 
+github.com/tklauser/numcpus
+Copyright (c) 2018-2021, Tobias Klauser
+Licensed under the Apache License, Version 2.0.
+https://github.com/tklauser/numcpus/blob/master/LICENSE
+
 github.com/yusufpapurcu/wmi
 Copyright (c) 2013 Stack Exchange
 Licensed under the MIT License.
@@ -78,3 +83,11 @@ golang.org/x/sys
 Copyright 2009 The Go Authors. All rights reserved.
 Licensed under the BSD 3-Clause License.
 https://cs.opensource.google/go/x/sys/+/master:LICENSE
+
+github.com/klauspost/compress
+Copyright (c) 2012 The Go Authors. All rights reserved.
+Copyright (c) 2019 Klaus Post. All rights reserved.
+Licensed under the BSD 3-Clause License.
+https://github.com/klauspost/compress/blob/master/LICENSE
+
+Portions of klauspost/compress are derived from the Go standard library.

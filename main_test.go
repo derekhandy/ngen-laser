@@ -18,7 +18,9 @@
 
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestRunReturnsFailureExitCodes(t *testing.T) {
 	tests := []struct {

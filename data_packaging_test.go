@@ -43,12 +43,30 @@ func TestPackageRecordFramingEscapesDelimiterBytes(t *testing.T) {
 		t.Fatalf("payload changed during framing: %v", []byte(records[0].payload))
 	}
 
+	// Build a valid container payload: one part, length-prefixed.
+	partBytes := InstructionsToBytesRuntime(string(TextToInstructions([]byte("payload"))))
+	var containerBuf bytes.Buffer
+	writeUint32LE(&containerBuf, 1)
+	writeUint32LE(&containerBuf, uint32(len(partBytes)))
+	containerBuf.Write(partBytes)
+
+	// Apply the codec the header will declare.
+	containerPayload, err := CompressPayload(containerBuf.Bytes(), CodecDeflate)
+	if err != nil {
+		t.Fatalf("compress container: %v", err)
+	}
+
+	// Assemble the package: format marker, codec byte, one record.
+	var pkg bytes.Buffer
+	pkg.Write(packageFormat)
+	pkg.WriteByte(byte(CodecDeflate))
+	pkg.Write(encodePackageRecord("part0.isp", "nested/~file.txt", containerPayload))
+
 	root := t.TempDir()
-	encoded := InstructionsToBytesRuntime(string(TextToInstructions([]byte("payload"))))
-	safePackage := string(append(append([]byte{}, packageFormat...), encodePackageRecord("part0.isp", "nested/~file.txt", encoded)...))
-	if err := RestoreDirectoryTo("test.lzr", safePackage, "", root); err != nil {
+	if err := RestoreDirectoryTo("test.lzr", pkg.String(), "", root); err != nil {
 		t.Fatalf("safe package failed to restore: %v", err)
 	}
+
 	restored, err := os.ReadFile(filepath.Join(root, "nested", "~file.txt"))
 	if err != nil {
 		t.Fatalf("restored file missing: %v", err)

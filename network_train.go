@@ -211,27 +211,26 @@ func ForwardPassPopulation(rollout *Rollout, population []*Network, env *Compres
 
 		results := EvaluatePopulationParallel(rollout, rollout.Settings.Config.PopulationSize, env, population, rollout.Settings.Config.IterationLimit)
 		for _, res := range results {
-			resultPackedSize := ResultBestPackedSize(res.bestString, originalSize)
-			networkFitness := PacketSizeAdjustedFitness(
-				originalSize,
-				resultPackedSize,
-				res.fitness,
-			)
+			resultPackedSize := res.bestPackedSize
+			if resultPackedSize <= 0 {
+				resultPackedSize = ResultBestPackedSize(res.bestString, originalSize)
+			}
+			networkFitness := PacketSizeAdjustedFitness(originalSize, resultPackedSize, res.fitness)
+
 			passFitnesses[res.index] += networkFitness
 
 			if res.bestString != "" && res.bestString != "+" {
-				packedSize := PackedInstructionSize(res.bestString)
+				packedSize := resultPackedSize
 				if packedSize < bestSize {
+					bestString = res.bestString
 					bestSize = packedSize
 					bestScore = networkFitness
 					bestChain = CloneChainSteps(res.bestChain)
-					bestString = res.bestString
-
 				} else if packedSize == bestSize && networkFitness > bestScore {
+					bestString = res.bestString
 					bestSize = packedSize
 					bestScore = networkFitness
 					bestChain = CloneChainSteps(res.bestChain)
-					bestString = res.bestString
 				}
 			}
 		}

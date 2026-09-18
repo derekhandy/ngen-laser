@@ -19,6 +19,9 @@
 package main
 
 import (
+	"bytes"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -59,8 +62,110 @@ func TestOperandLineLengthTwoConsumesExactlyTwelveDigits(t *testing.T) {
 	}
 }
 
+func TestTwoDigitMagnitudeEcho(t *testing.T) {
+	inst := NewInstructions()
+
+	// Build a source where the same 15-glyph region appears twice in a row.
+	source := strings.Repeat("-,.;", 5)[:15]
+	original := source + source
+
+	// Insert !e15 at the boundary.
+	modified := original[:15] + "!e15" + original[15:]
+
+	interpreted := inst.Interpret(modified, 0, &[]IndexEntry{})
+	if interpreted == "" || interpreted == "+" {
+		t.Fatalf("interpret failed on %q", modified)
+	}
+
+	index := []IndexEntry{}
+	rendered := inst.Render(interpreted, 0, &index)
+	if rendered != original {
+		t.Fatalf("e15 round-trip:\n  original    %q\n  interpreted %q\n  rendered    %q",
+			original, interpreted, rendered)
+	}
+}
+
+func TestTwoDigitMagnitudeBoundary(t *testing.T) {
+	inst := NewInstructions()
+
+	for _, v := range []int{9, 10, 11, 30, 31} {
+		source := strings.Repeat("-", v)
+		original := source + source
+		modified := original[:v] + "!e" + strconv.Itoa(v) + original[v:]
+
+		interpreted := inst.Interpret(modified, 0, &[]IndexEntry{})
+		if interpreted == "" || interpreted == "+" {
+			t.Fatalf("v=%d: interpret failed", v)
+		}
+
+		index := []IndexEntry{}
+		rendered := inst.Render(interpreted, 0, &index)
+		if rendered != original {
+			t.Fatalf("v=%d: round-trip failed:\n  original %q\n  rendered %q",
+				v, original, rendered)
+		}
+	}
+}
+
+func TestSwapRoundTrip(t *testing.T) {
+	inst := NewInstructions()
+
+	// Original glyph stream: 9 glyphs = 3 coordinates.
+	original := "---,,,;;;"
+
+	// Network inserts !s3 at the boundary between the two 3-glyph runs.
+	modified := original[:3] + "!s3" + original[3:]
+
+	interpreted := inst.Interpret(modified, 0, &[]IndexEntry{})
+	if interpreted == "" || interpreted == "+" {
+		t.Fatalf("interpret failed on %q", modified)
+	}
+
+	index := []IndexEntry{}
+	rendered := inst.Render(interpreted, 0, &index)
+	if rendered == "" || rendered == "+" {
+		t.Fatalf("render failed on %q", interpreted)
+	}
+
+	// Lossless invariant: render(interpret(mod)) must reproduce the
+	// original glyph stream. The swap is a rearrangement; render undoes
+	// it to recover the bytes the network was compressing.
+	if rendered != original {
+		t.Fatalf("swap round-trip:\n  original    %q\n  interpreted %q\n  rendered    %q",
+			original, interpreted, rendered)
+	}
+}
+
+func TestExtendedOperandRoundTrip(t *testing.T) {
+	for _, mag := range []uint64{1, 2, 3, 8, 9} {
+		tok := PacketToken{
+			Kind:      PacketTokenMagnitudeOperand,
+			Op:        's',
+			Magnitude: mag,
+		}
+		enc := EncodePacketOperandToken(tok)
+		if len(enc) < 2 {
+			t.Fatalf("magnitude %d: encoded too short: %v", mag, enc)
+		}
+		if enc[0] != compactOperandExtended {
+			t.Fatalf("magnitude %d: first byte 0x%02x, want 0x%02x", mag, enc[0], compactOperandExtended)
+		}
+		r := bytes.NewReader(enc[1:])
+		got, err := ReadPacketOperandToken(r, compactOperandExtended)
+		if err != nil {
+			t.Fatalf("magnitude %d: decode: %v", mag, err)
+		}
+		if got.Op != 's' {
+			t.Fatalf("magnitude %d: got op %q, want 's'", mag, got.Op)
+		}
+		if got.Magnitude != mag {
+			t.Fatalf("magnitude %d: got %d", mag, got.Magnitude)
+		}
+	}
+}
+
 func TestDefaultOperandLineLengthRendersTranslateAcrossTwoLines(t *testing.T) {
-	withOperandLineLength(t, 2)
+	UpdateOperandLength(2)
 
 	rendered := NewICommands().ReturnRendered(",,,,,,,,,,,,tu")
 	want := ",,,,,,,,,,,,,-,,-,,-,,-,"
@@ -70,7 +175,7 @@ func TestDefaultOperandLineLengthRendersTranslateAcrossTwoLines(t *testing.T) {
 }
 
 func TestOperandLineLengthScalesCoordinateAndStringOperands(t *testing.T) {
-	withOperandLineLength(t, 3)
+	UpdateOperandLength(3)
 
 	interpreted := NewICommands().ReturnInterpret(",,,,,,,,,,,,,,,,,,!tu------------------", 0, &[]IndexEntry{})
 	if interpreted != ",,,,,,,,,,,,,,,,,,tu" {
@@ -81,5 +186,35 @@ func TestOperandLineLengthScalesCoordinateAndStringOperands(t *testing.T) {
 	want := ",,,,,,......------,,,,,,......------"
 	if rendered != want {
 		t.Fatalf("expected l to sort each 6-digit line independently, got %q want %q", rendered, want)
+	}
+}
+
+func TestTwoDigitMagnitudeRoundTrip(t *testing.T) {
+	inst := NewInstructions()
+
+	for _, v := range []int{1, 9, 10, 15, 25, 31} {
+		source := strings.Repeat("-,.;", 11)[:v+((v+2)/3*3-v)] // v glyphs, padded to multiple of 3
+		for len(source) < v {
+			source += "-"
+		}
+		source = source[:v]
+		if v%3 != 0 {
+			source = source[:v-v%3]
+			continue
+		}
+		original := source + source
+		modified := original[:v] + "!e" + strconv.Itoa(v) + original[v:]
+
+		interpreted := inst.Interpret(modified, 0, &[]IndexEntry{})
+		if interpreted == "" || interpreted == "+" {
+			t.Fatalf("v=%d: interpret failed", v)
+		}
+
+		index := []IndexEntry{}
+		rendered := inst.Render(interpreted, 0, &index)
+		if rendered != original {
+			t.Fatalf("v=%d: round-trip failed:\n  original    %q\n  interpreted %q\n  rendered    %q",
+				v, original, interpreted, rendered)
+		}
 	}
 }

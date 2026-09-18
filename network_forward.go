@@ -220,7 +220,7 @@ func LayerActivation(input []float32, layer Layer, output []float32) []float32 {
 
 func BuildOperandString(current, operand string, params map[string]interface{}) string {
 	switch operand {
-	case "h", "k":
+	case "h", "k", "n", "g", "l":
 		return operand
 	case "e":
 		return operand + MagnitudeToDigits(OperandMagnitude(params))
@@ -240,8 +240,12 @@ func BuildOperandString(current, operand string, params map[string]interface{}) 
 		return operand + axis
 	case "m", "d", "b", "o":
 		return operand + MagnitudeToDigits(OperandMagnitude(params))
-	case "n", "g", "l":
-		return operand
+	case "s":
+		mag := OperandMagnitude(params)
+		if mag > 9 {
+			mag = 9
+		}
+		return operand + MagnitudeToDigits(mag)
 	case "i":
 		lengthVal, _ := params["length"].(int)
 		lengthVal = ClampIndexLength(lengthVal, len(current))
@@ -290,7 +294,7 @@ func MinHeadForOperand(operand string, params map[string]interface{}) int {
 	switch operand {
 	case "h", "k":
 		return 1
-	case "e", "b", "o":
+	case "e", "b", "o", "s":
 		return OperandMagnitude(params)
 	case "t", "f", "x", "y", "z", "r", "m", "d", "n", "g", "l":
 		return operandDigitLength()
@@ -305,7 +309,7 @@ func MinTailForOperand(operand string, params map[string]interface{}) int {
 		return 2
 	case "k":
 		return 3
-	case "e", "b", "o":
+	case "e", "b", "o", "s":
 		return OperandMagnitude(params)
 	case "t", "f", "x", "y", "z", "r", "m", "d", "n", "g", "l":
 		return operandDigitLength()
@@ -317,6 +321,9 @@ func MinTailForOperand(operand string, params map[string]interface{}) int {
 	}
 }
 
+// OperandMagnitude extracts the magnitude parameter, clamped to the range
+// supported by the extended codec. Callers that need a narrower range (for
+// example, `s`, which only supports 1–9) must clamp after calling.
 func OperandMagnitude(params map[string]interface{}) int {
 	if params == nil {
 		return 1
@@ -325,7 +332,7 @@ func OperandMagnitude(params map[string]interface{}) int {
 	if !ok {
 		return 1
 	}
-	return ClampInt(val, 1, 9)
+	return ClampInt(val, 1, 31)
 }
 
 func CloneParams(src map[string]interface{}) map[string]interface{} {

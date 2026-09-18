@@ -54,6 +54,8 @@ type CompressionEnvironment struct {
 	current                string
 	bestString             string
 	bestPackedSize         int
+	currentBitOpsSize      int
+	currentPackedSize      int
 	attemptedSteps         int
 	successfulSteps        int
 	successfulImprovements int
@@ -77,6 +79,8 @@ func NewCompressionEnvironment(original string, rollout *Rollout) *CompressionEn
 
 	commands := NewICommands()
 	interpreted := commands.ReturnInterpret(original, 0, &[]IndexEntry{})
+	packed := PackedInstructionSize(interpreted)
+	bitOps := BitOpsInstructionSize(interpreted)
 
 	return &CompressionEnvironment{
 		rollout:              rollout,
@@ -85,6 +89,8 @@ func NewCompressionEnvironment(original string, rollout *Rollout) *CompressionEn
 		current:              interpreted,
 		bestString:           interpreted,
 		bestPackedSize:       PackedInstructionSize(interpreted),
+		currentBitOpsSize:    bitOps,
+		currentPackedSize:    packed,
 		invalidComboCounts:   make(map[string]map[int]int),
 		indexUseCounts:       make(map[int]int),
 		operandUseCounts:     make(map[string]int),
@@ -103,6 +109,8 @@ func NewCompressionEnvironment(original string, rollout *Rollout) *CompressionEn
 
 func (env *CompressionEnvironment) Reset() string {
 	env.current = env.originalInstructions
+	env.currentBitOpsSize = BitOpsInstructionSize(env.current)
+	env.currentPackedSize = PackedInstructionSize(env.current)
 	if env.bestString == "" {
 		env.bestString = env.current
 	}
@@ -166,10 +174,12 @@ func (env *CompressionEnvironment) StepWithManual(idx int, operand string, param
 	env.RecordAttempt(idx)
 
 	prevString := env.current
-	prevSize := PackedInstructionSize(prevString)
+	prevBitOpsSize := env.currentBitOpsSize
+	prevSize := env.currentPackedSize
 
-	var interpreted string
+	interpreted := prevString
 	newSize := prevSize
+	newBitOpsSize := prevBitOpsSize
 
 	stop := false
 	invalid := false
@@ -194,14 +204,26 @@ func (env *CompressionEnvironment) StepWithManual(idx int, operand string, param
 				invalid = true
 			} else {
 				validAction = true
-				newSize = PackedInstructionSize(interpreted)
+				newBitOpsSize = BitOpsInstructionSize(interpreted)
+
+				if trainingSizeMode == SizeModeBitOps {
+					// Bit-ops is the metric. No gate, no second call.
+					newSize = newBitOpsSize
+				} else if newBitOpsSize < prevBitOpsSize {
+					// DEFLATE mode. Only pay for DEFLATE when bit-ops
+					// improved, which correlates with DEFLATE improving.
+					newSize = PackedInstructionSize(interpreted)
+				} else {
+					newSize = prevSize
+				}
 
 				if interpreted != env.current {
 					env.current = interpreted
+					env.currentBitOpsSize = newBitOpsSize
+					env.currentPackedSize = newSize
 				}
 			}
 		}
-
 	}
 
 	if validAction && !invalid {
@@ -249,10 +271,12 @@ func (env *CompressionEnvironment) Step(output NetworkOutput, iterationLimit int
 	env.RecordAttempt(idx)
 
 	prevString := env.current
-	prevSize := PackedInstructionSize(prevString)
+	prevBitOpsSize := env.currentBitOpsSize
+	prevSize := env.currentPackedSize
 
 	interpreted := prevString
 	newSize := prevSize
+	newBitOpsSize := prevBitOpsSize
 
 	stop := false
 	invalid := false
@@ -282,14 +306,26 @@ func (env *CompressionEnvironment) Step(output NetworkOutput, iterationLimit int
 				invalid = true
 			} else {
 				validAction = true
-				newSize = PackedInstructionSize(interpreted)
+				newBitOpsSize = BitOpsInstructionSize(interpreted)
+
+				if trainingSizeMode == SizeModeBitOps {
+					// Bit-ops is the metric. No gate, no second call.
+					newSize = newBitOpsSize
+				} else if newBitOpsSize < prevBitOpsSize {
+					// DEFLATE mode. Only pay for DEFLATE when bit-ops
+					// improved, which correlates with DEFLATE improving.
+					newSize = PackedInstructionSize(interpreted)
+				} else {
+					newSize = prevSize
+				}
 
 				if interpreted != env.current {
 					env.current = interpreted
+					env.currentBitOpsSize = newBitOpsSize
+					env.currentPackedSize = newSize
 				}
 			}
 		}
-
 	}
 
 	if validAction && !invalid {
@@ -332,7 +368,7 @@ func (env *CompressionEnvironment) Step(output NetworkOutput, iterationLimit int
 			env.successfulImprovements++
 			env.improvementStreak++
 			metrics := StepMetrics{
-				originalSize:      PackedInstructionSize(env.originalInstructions),
+				originalSize:      env.bestPackedSize,
 				previousSize:      prevSize,
 				newSize:           newSize,
 				packedImprovement: true,
@@ -348,7 +384,6 @@ func (env *CompressionEnvironment) Step(output NetworkOutput, iterationLimit int
 			}
 
 			score += env.CalculateReward(metrics)
-
 		} else {
 			if env.improvementStreak > 0 {
 				env.improvementStreak--
@@ -358,8 +393,8 @@ func (env *CompressionEnvironment) Step(output NetworkOutput, iterationLimit int
 
 	if packedRegression {
 		growthPercentage := float32(0.0)
-		if PackedInstructionSize(env.originalInstructions) > 0 {
-			growthPercentage = float32(newSize) / float32(PackedInstructionSize(env.originalInstructions))
+		if env.bestPackedSize > 0 {
+			growthPercentage = float32(newSize) / float32(env.bestPackedSize)
 		}
 		score += growthPercentage * env.rollout.Settings.Rubric.SizeGrowthPunishment
 	}

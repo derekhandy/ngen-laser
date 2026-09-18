@@ -48,6 +48,22 @@ func (p AppPaths) AnalyticsDir(safeGUID string) string {
 	return filepath.Join(p.Root, "analytics", safeGUID)
 }
 
+// TrainingSizeMode selects which size function the fitness comparison uses.
+// SizeModeBitOps is the fast path and matches the pre-DEFLATE behavior.
+// SizeModeDeflate runs a real DEFLATE compression on each candidate and is
+// roughly 5-10x slower, but aligns the training signal with the shipped
+// per-container DEFLATE format.
+type TrainingSizeMode int
+
+var packagingCodec = CodecDeflate
+
+const (
+	SizeModeBitOps TrainingSizeMode = iota
+	SizeModeDeflate
+)
+
+var trainingSizeMode = SizeModeBitOps
+
 type Rollout struct {
 	Paths    AppPaths
 	Settings RolloutSettings
@@ -216,6 +232,29 @@ func parseDataDirFlag(args []string) (string, []string, error) {
 	return dataDir, rest, nil
 }
 
+func parseCPUFlag(args []string) (int, []string, error) {
+	rest := make([]string, 0, len(args))
+	cpus := 0
+
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--cpus" {
+			rest = append(rest, args[i])
+			continue
+		}
+		if i+1 >= len(args) {
+			return 0, nil, fmt.Errorf("--cpus requires a value")
+		}
+		n, err := strconv.Atoi(args[i+1])
+		if err != nil || n < 1 {
+			return 0, nil, fmt.Errorf("--cpus value must be a positive integer, got %q", args[i+1])
+		}
+		cpus = n
+		i++
+	}
+
+	return cpus, rest, nil
+}
+
 // parseThresholdFlag extracts an optional "-t <comp-ratio>" pair from args.
 // Returns nil when the flag is absent. Scans the whole slice, so the flag
 // may appear before or after the path.
@@ -244,6 +283,58 @@ func parseThresholdFlag(args []string) (*float32, []string, error) {
 	}
 
 	return override, rest, nil
+}
+
+// parseDeflateFitnessFlag extracts an optional --deflate-fitness boolean
+// from args. Returns true when present. No value argument.
+func parseDeflateFitnessFlag(args []string) (bool, []string, error) {
+	rest := make([]string, 0, len(args))
+	present := false
+
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--deflate-fitness" {
+			rest = append(rest, args[i])
+			continue
+		}
+		present = true
+	}
+
+	return present, rest, nil
+}
+
+// parseCodecFlag extracts an optional --codec <name> pair from args. The
+// name is matched case-insensitively. Returns nil when the flag is absent.
+func parseCodecFlag(args []string) (*PackageCodec, []string, error) {
+	rest := make([]string, 0, len(args))
+	var result *PackageCodec
+
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--codec" {
+			rest = append(rest, args[i])
+			continue
+		}
+		if i+1 >= len(args) {
+			return nil, nil, fmt.Errorf("--codec requires a value")
+		}
+		name := strings.ToLower(strings.TrimSpace(args[i+1]))
+		var codec PackageCodec
+		switch name {
+		case "raw", "none":
+			codec = CodecRaw
+		case "deflate", "flate":
+			codec = CodecDeflate
+		case "zstd":
+			codec = CodecZstd
+		case "xz", "lzma":
+			codec = CodecXz
+		default:
+			return nil, nil, fmt.Errorf("unknown codec %q (want raw, deflate, zstd, or xz)", args[i+1])
+		}
+		result = &codec
+		i++
+	}
+
+	return result, rest, nil
 }
 
 func FilterOperandLogitsByTrainingFlags(rollout *Rollout, logits []float32) {

@@ -17,5 +17,6 @@ dist/
 .gocache-race
 
 build-release.sh
+test.lzr
 
 *.exe
